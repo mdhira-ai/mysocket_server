@@ -18,6 +18,32 @@ const io = new Server(server, {
     },
 });
 
+
+// Clear all data on server startup
+const clearAllUsersStatus = () => {
+    return new Promise((resolve, reject) => {
+        remove("users_status", "", [], (err, changes) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(changes);
+            }
+        });
+    });
+};
+
+
+
+// Clear database on startup
+clearAllUsersStatus()
+    .then(() => {
+        console.log("Database cleared on startup");
+    })
+    .catch((err) => {
+        console.error("Error clearing database on startup:", err);
+    });
+
+
 const getAllUsersStatus = () => {
     return new Promise((resolve, reject) => {
         read("users_status", "", [], (err, rows) => {
@@ -153,5 +179,6 @@ app.get("/", (req, res) => {
 });
 
 server.listen(port, () => {
+
     console.log(`server running at http://localhost:${port}`);
 });
