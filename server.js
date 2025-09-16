@@ -146,6 +146,19 @@ io.on("connection", async (socket) => {
     await createUserStatus(1, "/", socket.id);
     await broadcastUserStatus();
 
+    // send notification to specific client
+    socket.on("notify", (data) => {
+        const { toSocketId } = data;
+
+        io.to(toSocketId).emit("notification", {
+            from: socket.id,
+            message: "You have a new notification!",
+        });
+        console.log("Notification sent to:", toSocketId);
+    });
+
+
+
     // Get current users list
     socket.on("get_users", async () => {
         try {
