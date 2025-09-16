@@ -147,6 +147,11 @@ io.on("connection", async (socket) => {
     });
 });
 
+
+app.get("/", (req, res) => {
+    res.send("<h1>Hello World!</h1>");
+});
+
 server.listen(port, () => {
     console.log(`server running at http://localhost:${port}`);
 });
