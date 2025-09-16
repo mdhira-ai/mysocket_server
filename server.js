@@ -1,0 +1,152 @@
+const express = require("express");
+const { createServer } = require("node:http");
+const { Server } = require("socket.io");
+const cors = require("cors");
+
+const { create, read, update, remove } = require("./crud");
+const port = 3001;
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const server = createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+    },
+});
+
+const getAllUsersStatus = () => {
+    return new Promise((resolve, reject) => {
+        read("users_status", "", [], (err, rows) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(rows);
+            }
+        });
+    });
+};
+
+// Helper function to get user by socket_id
+const getUserBySocketId = (socketId) => {
+    return new Promise((resolve, reject) => {
+        read("users_status", "WHERE socket_id = ?", [socketId], (err, rows) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(rows[0] || null);
+            }
+        });
+    });
+};
+
+// Helper function to create new user status entry
+const createUserStatus = (status, whichPage, socketId) => {
+    return new Promise((resolve, reject) => {
+        const data = {
+            status: status,
+            which_page: whichPage || "home",
+            socket_id: socketId,
+            connected_at: new Date().toISOString(),
+        };
+
+        create("users_status", data, (err, lastID) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(lastID);
+            }
+        });
+    });
+};
+
+// Helper function to update user status
+const updateUserStatus = (socketId, status, whichPage = null) => {
+    return new Promise((resolve, reject) => {
+        const updateData = { status: status };
+        if (whichPage) {
+            updateData.which_page = whichPage;
+        }
+
+        update(
+            "users_status",
+            updateData,
+            "WHERE socket_id = ?",
+            [socketId],
+            (err, changes) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(changes);
+                }
+            }
+        );
+    });
+};
+
+// Helper function to remove user status by socket_id
+const removeUserStatus = (socketId) => {
+    return new Promise((resolve, reject) => {
+        remove(
+            "users_status",
+            "WHERE socket_id = ?",
+            [socketId],
+            (err, changes) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(changes);
+                }
+            }
+        );
+    });
+};
+
+// Helper function to broadcast user status to all clients
+const broadcastUserStatus = async () => {
+    try {
+        io.emit("users_status_update", await getAllUsersStatus());
+    } catch (error) {
+        console.error("Error broadcasting user status:", error);
+    }
+};
+
+io.on("connection", async (socket) => {
+    console.log("a user connected", socket.id);
+
+    await createUserStatus(1, "/", socket.id);
+    await broadcastUserStatus();
+
+    // Get current users list
+    socket.on("get_users", async () => {
+        try {
+            const users = await getAllUsersStatus();
+            socket.emit("users_list", users);
+        } catch (error) {
+            console.error("Error getting users list:", error);
+            socket.emit("users_list", []);
+        }
+    });
+
+    // Handle user disconnect
+    socket.on("disconnect", async () => {
+        try {
+            // Remove from database
+            await updateUserStatus(socket.id, 0);
+
+            console.log(`User ID: ${socket.id} disconnected `);
+
+            // Broadcast updated user list to all remaining connected clients
+            await broadcastUserStatus();
+        } catch (error) {
+            console.error("Error handling user disconnection:", error);
+        }
+    });
+});
+
+server.listen(port, () => {
+    console.log(`server running at http://localhost:${port}`);
+});
