@@ -14,7 +14,9 @@ function create(table, data, callback) {
     const keys = Object.keys(data);
     const values = Object.values(data);
     const placeholders = keys.map(() => '?').join(', ');
-    const sql = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`;
+    // Escape column names with square brackets to handle reserved keywords
+    const escapedKeys = keys.map(key => `[${key}]`).join(', ');
+    const sql = `INSERT INTO ${table} (${escapedKeys}) VALUES (${placeholders})`;
     const db = getDb();
     db.run(sql, values, function(err) {
         db.close();
@@ -36,7 +38,8 @@ function read(table, where = '', params = [], callback) {
 function update(table, data, where, params, callback) {
     const keys = Object.keys(data);
     const values = Object.values(data);
-    const setClause = keys.map(k => `${k} = ?`).join(', ');
+    // Escape column names with square brackets to handle reserved keywords
+    const setClause = keys.map(k => `[${k}] = ?`).join(', ');
     const sql = `UPDATE ${table} SET ${setClause} ${where}`;
     const db = getDb();
     db.run(sql, [...values, ...params], function(err) {
@@ -54,6 +57,12 @@ function remove(table, where, params, callback) {
         callback(err, this ? this.changes : null);
     });
 }
+
+
+
+
+
+
 
 module.exports = {
     create,

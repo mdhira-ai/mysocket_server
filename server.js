@@ -19,6 +19,21 @@ const io = new Server(server, {
 });
 
 
+//table schema
+// CREATE TABLE "users_status" (
+// 	"id"	INTEGER,
+// 	"status"	INTEGER,
+// 	"which_page"	TEXT,
+// 	"socket_id"	TEXT,
+// 	"connected_at"	TEXT,
+// 	"email"	TEXT,
+// 	"name"	TEXT,
+// 	"session_id"	TEXT,
+// 	"group"	TEXT,
+// 	PRIMARY KEY("id" AUTOINCREMENT)
+// )
+
+
 // Clear all data on server startup
 const clearAllUsersStatus = () => {
     return new Promise((resolve, reject) => {
@@ -70,13 +85,17 @@ const getUserBySocketId = (socketId) => {
 };
 
 // Helper function to create new user status entry
-const createUserStatus = (status, whichPage, socketId) => {
+const createUserStatus = (status, whichPage, socketId, email, name, sessionId, group) => {
     return new Promise((resolve, reject) => {
         const data = {
             status: status,
             which_page: whichPage || "home",
             socket_id: socketId,
             connected_at: new Date().toISOString(),
+            email: email || "",
+            name: name || "",
+            session_id: sessionId || "",
+            group: group || "anonymous",
         };
 
         create("users_status", data, (err, lastID) => {
@@ -140,22 +159,73 @@ const broadcastUserStatus = async () => {
     }
 };
 
+const getuserbyemail = (email) => {
+    return new Promise((resolve, reject) => {
+        read("users_status", "WHERE email = ?", [email], (err, rows) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(rows);
+            }
+        });
+    });
+};
+
+
+const updateuserstatusandsocketid = (email, socketId, status, whichPage = null) => {
+    return new Promise((resolve, reject) => {
+        const updateData = { status: status, socket_id: socketId };
+        if (whichPage) {
+            updateData.which_page = whichPage;
+        }
+
+        update(
+            "users_status",
+            updateData,
+            "WHERE email = ?",
+            [email],
+            (err, changes) => {
+                if (err) {
+                    reject(err);
+                } else {    
+                    resolve(changes);
+                }
+            }
+        );
+    });
+};
+
 io.on("connection", async (socket) => {
     console.log("a user connected", socket.id);
 
-    await createUserStatus(1, "/", socket.id);
+    await createUserStatus(1, "/", socket.id, "", "", "");
     await broadcastUserStatus();
 
     // send notification to specific client
     socket.on("notify", (data) => {
-        const { toSocketId } = data;
+        const { toSocketId, message } = data;
 
         io.to(toSocketId).emit("notification", {
             from: socket.id,
-            message: "You have a new notification!",
+            message: message,
         });
         console.log("Notification sent to:", toSocketId);
     });
+
+    socket.on("user_connected_auth", async(data) => {
+        const { userId, email, which_page, name } = data ;
+        // console.log("User connected data:", data);
+        console.log(`User connected: ${userId}, Email: ${email}, Page: ${which_page}, Name: ${name}`);
+        
+
+        // await updateuserstatusandsocketid(email, socket.id, 1, which_page);
+
+        // Broadcast updated user list to all connected clients
+        // await broadcastUserStatus();
+    });
+
+  
+
 
 
 
